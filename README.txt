@@ -1,3 +1,23 @@
+Private Sub Worksheet_Change(ByVal Target As Range)
+    Dim watchCells As Range
+    Set watchCells = Union(Me.Range("C2"), Me.Range("C3"), Me.Range("D6"), Me.Range("E6"), Me.Range("F6"))
+
+    If Not Application.Intersect(Target, watchCells) Is Nothing Then
+        Application.EnableEvents = False
+
+        If MsgBox("Valeur modifiée sur " & Me.Name & "." & vbCrLf & "Actualiser le tableau de cette feuille ?", _
+                  vbYesNo + vbQuestion, "Actualisation") = vbYes Then
+            Call UpdateDashboardForSheet(Me)
+        End If
+
+        Application.EnableEvents = True
+    End If
+End Sub
+
+
+
+
+
 Can I add another submodule to lanch this code wheever thé user change one of thé 5 Cells values Of course. This is an excellent and very practical use case for VBA. The level of dynamic interaction you're describing is where VBA starts to shine and becomes much more efficient than complex formula-based solutions.
 The logic is:
 - 
