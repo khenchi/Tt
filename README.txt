@@ -1,3 +1,128 @@
+Can I add another submodule to lanch this code wheever thé user change one of thé 5 Cells values Of course. This is an excellent and very practical use case for VBA. The level of dynamic interaction you're describing is where VBA starts to shine and becomes much more efficient than complex formula-based solutions.
+The logic is:
+- 
+User provides two high-level filters (CDR and LAW).
+
+- 
+VBA filters the master Pivot Table based on those inputs.
+
+- 
+VBA then reads the resulting, smaller set of row labels (Category, Sub-Category, Product) from the filtered pivot.
+
+- 
+VBA populates the dashboard table with these dynamic row labels.
+
+- 
+Finally, VBA loops through this new table to fill in the data values for the three dates specified by the user.
+
+
+Here is the complete solution, including the Excel setup and the VBA code.
+### **Part 1: The Excel Template Setup (Crucial!)**
+Before you write any code, your Dashboard sheet needs to be set up with named cells and a named table. This makes your VBA code clean and easy to read.
+**Step 1: Create Named Input Cells**
+- 
+Choose cells for your user inputs.
+
+- 
+Select the cell where the user will type the CDR value (e.g., C2).
+
+- 
+Go to the **Name Box** (the small box to the left of the formula bar) and type the name **inp_CDR** and press **Enter**.
+
+- 
+Repeat this for the other inputs:
+  - 
+C3 -> **inp_LAW**
+
+  - 
+D6 -> **inp_Date1**
+
+  - 
+E6 -> **inp_Date2**
+
+  - 
+F6 -> **inp_Date3**
+
+
+
+
+**Step 2: Create the Presentation Table**
+- 
+Create the headers for your output table starting in row 7, for example.
+  - 
+A7: **Category**
+
+  - 
+B7: **Sub-Category**
+
+  - 
+C7: **Product**
+
+  - 
+D7: (This header will be linked to the date input) -> formula =inp_Date1
+
+  - 
+E7: -> formula =inp_Date2
+
+  - 
+F7: -> formula =inp_Date3
+
+
+
+- 
+Select all these headers (A7:F7).
+
+- 
+Press **Ctrl + T** (or go to **Insert > Table**).
+
+- 
+Check **"My table has headers"** and click **OK**.
+
+- 
+A new **Table Design** tab appears. On the far left, change the **Table Name** to **tbl_Report**.
+
+
+Your Dashboard is now set up perfectly for VBA to interact with.
+### **Part 2: The VBA Code**
+Press **Alt + F11** to open the VBA Editor, go to **Insert > Module**, and paste the following code.
+Generated vba
+      `' ================================================================================= '  Main Subroutine to update the dynamic dashboard ' ================================================================================= Sub UpdateDynamicDashboard()     ' --- Configuration: Set these names to match your workbook ---     Const DATA_SHEET_NAME As String = "Data"     Const PIVOT_TABLE_NAME As String = "TCD_Data"     Const REPORT_TABLE_NAME As String = "tbl_Report"          ' --- Variable Declaration ---     Dim wb As Workbook     Dim dashboardSheet As Worksheet     Dim dataSheet As Worksheet     Dim pt As PivotTable     Dim reportTable As ListObject          ' User Inputs     Dim cdrInput As String, lawInput As String     Dim date1 As Date, date2 As Date, date3 As Date          ' Pivot Fields for filtering     Dim ptFieldCDR As PivotField, ptFieldLAW As PivotField          ' --- Error Handling ---     On Error GoTo ErrorHandler          ' --- Optimization: Make the macro run much faster ---     Application.ScreenUpdating = False     Application.EnableEvents = False     Application.Calculation = xlCalculationManual          ' --- 1. Get Handles to all our objects ---     Set wb = ThisWorkbook     Set dashboardSheet = wb.ActiveSheet ' Assumes the user is on the dashboard     Set dataSheet = wb.Sheets(DATA_SHEET_NAME)     Set pt = dataSheet.PivotTables(PIVOT_TABLE_NAME)     Set reportTable = dashboardSheet.ListObjects(REPORT_TABLE_NAME)          ' --- 2. Read all user inputs from the named cells ---     cdrInput = dashboardSheet.Range("inp_CDR").Value     lawInput = dashboardSheet.Range("inp_LAW").Value     date1 = dashboardSheet.Range("inp_Date1").Value     date2 = dashboardSheet.Range("inp_Date2").Value     date3 = dashboardSheet.Range("inp_Date3").Value          ' --- 3. Filter the Master Pivot Table based on user inputs ---     Debug.Print "Filtering Pivot for CDR='" & cdrInput & "' and LAW='" & lawInput & "'"          ' Get handles to the pivot fields we need to filter     Set ptFieldCDR = pt.PivotFields("CDR") ' Change "CDR" to your actual field name     Set ptFieldLAW = pt.PivotFields("LAW") ' Change "LAW" to your actual field name          ' Clear old filters to ensure a clean state     pt.ClearAllFilters          ' Apply the new filters from user input     ptFieldCDR.CurrentPage = cdrInput     ptFieldLAW.CurrentPage = lawInput     pt.PivotCache.Refresh ' Ensure pivot cache reflects the filter change          ' --- 4. Populate the Report Table with the new, filtered row labels ---     Debug.Print "Populating report table rows..."          ' Clear any old data from the report table     If reportTable.ListRows.Count > 0 Then         reportTable.DataBodyRange.Delete     End If          ' Loop through the visible items of the filtered pivot table     Dim newRow As ListRow     Dim catItem As PivotItem, subCatItem As PivotItem, prodItem As PivotItem          ' This nested loop structure correctly extracts the hierarchical row data     For Each catItem In pt.PivotFields("Category").VisibleItems         For Each subCatItem In pt.PivotFields("Sub-Category").VisibleItems             For Each prodItem In pt.PivotFields("Product").VisibleItems                 ' Use a quick GetPivotData check to see if this combination actually exists                 On Error Resume Next                 Dim checkValue As Variant                 checkValue = pt.GetPivotData("Somme de AMOUNT", "Category", catItem.Name, "Sub-Category", subCatItem.Name, "Product", prodItem.Name)                 If Err.Number = 0 Then ' If no error, the combination is valid                     Set newRow = reportTable.ListRows.Add                     newRow.Range(1).Value = catItem.Name                     newRow.Range(2).Value = subCatItem.Name                     newRow.Range(3).Value = prodItem.Name                 End If                 On Error GoTo ErrorHandler ' Reset error handling             Next prodItem         Next subCatItem     Next catItem          ' --- 5. Fill in the data values for the three dates ---     Debug.Print "Filling in data values for the dates..."          Dim r As ListRow     Dim pivotValue As Variant     For Each r In reportTable.ListRows         ' Get data for Date 1         On Error Resume Next         pivotValue = pt.GetPivotData("Somme de AMOUNT", "Category", r.Range(1).Value, "Sub-Category", r.Range(2).Value, "Product", r.Range(3).Value, "DATE_STOCK", date1)         r.Range(4).Value = IIf(IsError(pivotValue), "", pivotValue)         Erase pivotValue                  ' Get data for Date 2         pivotValue = pt.GetPivotData("Somme de AMOUNT", "Category", r.Range(1).Value, "Sub-Category", r.Range(2).Value, "Product", r.Range(3).Value, "DATE_STOCK", date2)         r.Range(5).Value = IIf(IsError(pivotValue), "", pivotValue)         Erase pivotValue                  ' Get data for Date 3         pivotValue = pt.GetPivotData("Somme de AMOUNT", "Category", r.Range(1).Value, "Sub-Category", r.Range(2).Value, "Product", r.Range(3).Value, "DATE_STOCK", date3)         r.Range(6).Value = IIf(IsError(pivotValue), "", pivotValue)         Erase pivotValue                  On Error GoTo ErrorHandler     Next r          MsgBox "Dashboard has been updated!", vbInformation  Cleanup:     ' --- Restore Excel's normal settings ---     Application.Calculation = xlCalculationAutomatic     Application.EnableEvents = True     Application.ScreenUpdating = True     Exit Sub  ErrorHandler:     MsgBox "An error occurred in the VBA code: " & vbCrLf & Err.Description, vbCritical     Resume Cleanup End Sub`     
+**Important:** You must change the field names in quotes (like "CDR", "LAW", "Category", "Sub-Category", "Product", "DATE_STOCK", and "Somme de AMOUNT") to **exactly match** the names in your Pivot Table.
+### **Part 3: How to Run the Code**
+- 
+**Add a Button:** On your Dashboard sheet, go to **Insert > Shapes** and draw a button. Type "Refresh Report" on it.
+
+- 
+**Assign the Macro:** **Right-click** on the button shape and choose **Assign Macro...**.
+
+- 
+Select **UpdateDynamicDashboard** from the list and click **OK**.
+
+
+Now, your user can simply type their CDR and LAW values, choose their three dates, and click the "Refresh Report" button. The VBA code will run and build the entire custom report for them instantly.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Yes, absolutely. This is an excellent idea and a very common and professional way to solve this exact problem.
 
 You are correct to identify that the Oracle database connection is the most fragile part of the system. By moving this responsibility from Excel into a dedicated Python script, you make the entire process more robust, portable, and easier to debug.
