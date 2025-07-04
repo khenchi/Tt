@@ -1,3 +1,77 @@
+import pandas as pd
+
+def generate_subtotals_generic(df, hierarchy_cols, value_cols):
+    """
+    Génère un DataFrame avec des sous-totaux hiérarchiques dynamiques.
+    
+    :param df: DataFrame source
+    :param hierarchy_cols: liste ordonnée des colonnes hiérarchiques (ex : ["Cat", "SubCat", "Product"])
+    :param value_cols: liste des colonnes à agréger (ex : ["Amount1", "Amount2"])
+    :return: DataFrame avec sous-totaux insérés
+    """
+    base = df.copy()
+
+    # Masquer dernier niveau s'il est égal au précédent
+    if len(hierarchy_cols) >= 2:
+        last = hierarchy_cols[-1]
+        prev = hierarchy_cols[-2]
+        base[last] = base.apply(
+            lambda row: "" if row[last] == row[prev] else row[last], axis=1
+        )
+
+    all_levels = [base]
+
+    # Boucle sur les niveaux hiérarchiques (du plus profond vers le plus haut)
+    for level in reversed(range(1, len(hierarchy_cols))):
+        group_cols = hierarchy_cols[:level]
+        group_name = hierarchy_cols[level]
+
+        # Vérifier si plus d'un élément par parent (sinon pas de sous-total)
+        counts = df.groupby(group_cols)[hierarchy_cols[level]].nunique().reset_index()
+        multiple = counts[counts[hierarchy_cols[level]] > 1]
+        if multiple.empty:
+            continue
+
+        # Calcul des sous-totaux
+        subtotal = (
+            df.groupby(group_cols)[value_cols]
+            .sum()
+            .reset_index()
+            .merge(multiple[group_cols], on=group_cols)
+        )
+        for col in hierarchy_cols[level:]:
+            subtotal[col] = ""
+        subtotal[group_name] = "SOUS-TOTAL " + subtotal[group_name]
+
+        # Réordonner les colonnes
+        subtotal = subtotal[hierarchy_cols + value_cols]
+        all_levels.append(subtotal)
+
+    # Niveau 0 (totaux globaux)
+    if len(hierarchy_cols) >= 1:
+        level0 = hierarchy_cols[0]
+        level0_counts = df[level0].value_counts()
+        multi0 = level0_counts[level0_counts > 1].index.tolist()
+
+        total0 = df.groupby([level0])[value_cols].sum().reset_index()
+        total0 = total0[total0[level0].isin(multi0)]
+        for col in hierarchy_cols[1:]:
+            total0[col] = ""
+        total0[hierarchy_cols[0]] = "SOUS-TOTAL " + total0[hierarchy_cols[0]]
+        total0 = total0[hierarchy_cols + value_cols]
+        all_levels.append(total0)
+
+    # Fusion finale
+    result = pd.concat(all_levels, ignore_index=True)
+    result = result.sort_values(by=hierarchy_cols, ignore_index=True)
+
+    return result
+
+
+
+
+
+
 def generate_subtotals_inplace(df, value_column="Amount"):
     # Copie des lignes d'origine
     base_rows = df.copy()
