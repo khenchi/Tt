@@ -1,4 +1,45 @@
 import pandas as pd
+
+def generate_subtotals(df):
+    # Niveau produit (ligne brute)
+    lvl3 = df.copy()
+
+    # Niveau Sous-Category (niveau 2)
+    sub_counts = df.groupby(["Category", "Sub-Category"])["Product"].nunique().reset_index()
+    multi_products = sub_counts[sub_counts["Product"] > 1][["Category", "Sub-Category"]]
+
+    lvl2 = (
+        df.groupby(["Category", "Sub-Category"], as_index=False)["Amount"]
+        .sum()
+        .merge(multi_products, on=["Category", "Sub-Category"])
+    )
+    lvl2["Product"] = "SOUS-TOTAL " + lvl2["Sub-Category"]
+
+    # Niveau Category (niveau 1)
+    cat_counts = df.groupby("Category")["Sub-Category"].nunique().reset_index()
+    multi_subcats = cat_counts[cat_counts["Sub-Category"] > 1]["Category"]
+
+    lvl1 = (
+        df.groupby(["Category"], as_index=False)["Amount"]
+        .sum()
+    )
+    lvl1 = lvl1[lvl1["Category"].isin(multi_subcats)]
+    lvl1["Sub-Category"] = ""
+    lvl1["Product"] = "SOUS-TOTAL " + lvl1["Category"]
+
+    # Regrouper
+    full = pd.concat([lvl3, lvl2, lvl1], ignore_index=True)
+
+    # Trier proprement
+    full = full.sort_values(by=["Category", "Sub-Category", "Product"], ignore_index=True)
+
+    return full
+
+
+
+
+
+import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 
