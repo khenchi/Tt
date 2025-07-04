@@ -1,3 +1,54 @@
+def generate_subtotals_inplace(df, value_column="Amount"):
+    # Copie des lignes d'origine
+    base_rows = df.copy()
+
+    # Niveau 2 : sous-category
+    sub_counts = df.groupby(["Category", "Sub-Category"])["Product"].nunique().reset_index()
+    multi_products = sub_counts[sub_counts["Product"] > 1][["Category", "Sub-Category"]]
+
+    lvl2 = (
+        df.groupby(["Category", "Sub-Category"], as_index=False)[value_column]
+        .sum()
+        .merge(multi_products, on=["Category", "Sub-Category"])
+    )
+    lvl2["Product"] = "SOUS-TOTAL " + lvl2["Sub-Category"]
+    lvl2 = lvl2[df.columns]  # assurer même ordre des colonnes
+
+    # Niveau 1 : category
+    cat_counts = df.groupby("Category")["Sub-Category"].nunique().reset_index()
+    multi_subcats = cat_counts[cat_counts["Sub-Category"] > 1]["Category"]
+
+    lvl1 = (
+        df.groupby(["Category"], as_index=False)[value_column]
+        .sum()
+    )
+    lvl1 = lvl1[lvl1["Category"].isin(multi_subcats)]
+    lvl1["Sub-Category"] = ""
+    lvl1["Product"] = "SOUS-TOTAL " + lvl1["Category"]
+    lvl1 = lvl1[df.columns]
+
+    # Combinaison complète
+    df_final = pd.concat([base_rows, lvl2, lvl1], ignore_index=True)
+    df_final = df_final.sort_values(by=["Category", "Sub-Category", "Product"], ignore_index=True)
+
+    return df_final
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import pandas as pd
 
 def generate_subtotals(df):
