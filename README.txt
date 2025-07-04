@@ -1,3 +1,69 @@
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.utils.dataframe import dataframe_to_rows
+
+def update_dashboard_sheet(filepath, sheet_name="Dashboard", data_sheet="Data"):
+    # Charger le classeur
+    wb = load_workbook(filepath)
+    if sheet_name not in wb.sheetnames or data_sheet not in wb.sheetnames:
+        print(f"Feuille '{sheet_name}' ou '{data_sheet}' introuvable.")
+        return
+
+    ws = wb[sheet_name]
+    ws_data = wb[data_sheet]
+
+    # Lire les filtres de la feuille Dashboard
+    cdr = ws["C2"].value
+    law = ws["C3"].value
+    date1 = ws["D6"].value
+    date2 = ws["E6"].value
+    date3 = ws["F6"].value
+
+    # Lire les données sources dans un DataFrame
+    data = ws_data.values
+    cols = next(data)
+    df = pd.DataFrame(data, columns=cols)
+
+    # Filtrer selon CDR et LAW
+    df_filtered = df[(df["CDR"] == cdr) & (df["LAW"] == law)]
+
+    # Construire tableau dynamique (comme un TCD)
+    pivot = df_filtered.pivot_table(
+        index=["Category", "Sub-Category", "Product"],
+        columns="DATE_STOCK",
+        values="AMOUNT",
+        aggfunc="sum"
+    ).reset_index()
+
+    # S'assurer que les dates demandées sont présentes
+    for d in [date1, date2, date3]:
+        if d not in pivot.columns:
+            pivot[d] = None
+
+    # Réorganiser le tableau
+    final_table = pivot[["Category", "Sub-Category", "Product", date1, date2, date3]]
+
+    # Nettoyer la zone de tableau (ligne 8+)
+    for row in ws.iter_rows(min_row=8, max_col=6, max_row=ws.max_row):
+        for cell in row:
+            cell.value = None
+
+    # Insérer les nouvelles lignes à partir de la ligne 8
+    for i, row in enumerate(dataframe_to_rows(final_table, index=False, header=False)):
+        for j, val in enumerate(row):
+            ws.cell(row=8 + i, column=1 + j, value=val)
+
+    # Sauvegarde
+    updated_path = filepath.replace(".xlsx", "_UPDATED.xlsx")
+    wb.save(updated_path)
+    print(f"✅ Feuille '{sheet_name}' mise à jour et enregistrée sous : {updated_path}")
+
+
+
+
+
+
+
 Private Sub Worksheet_Change(ByVal Target As Range)
     Dim watchCells As Range
     Set watchCells = Union(Me.Range("C2"), Me.Range("C3"), Me.Range("D6"), Me.Range("E6"), Me.Range("F6"))
