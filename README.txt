@@ -1,3 +1,57 @@
+' --- In a new Module, e.g., "RunPython" ---
+
+Sub RunPythonScript()
+    ' This macro runs the Python script and passes the current workbook's path.
+    
+    Dim shell As Object
+    Set shell = CreateObject("WScript.Shell")
+    
+    Dim pythonPath As String
+    Dim scriptPath As String
+    Dim command As String
+    
+    ' Read paths from the "Config" sheet using the defined Names.
+    ' This is much better than hardcoding paths in VBA.
+    On Error Resume Next
+    pythonPath = ThisWorkbook.Names("PythonPath").RefersToRange.Value
+    scriptPath = ThisWorkbook.Names("PythonScript").RefersToRange.Value
+    If Err.Number <> 0 Then
+        MsgBox "Error: Could not find 'PythonPath' or 'PythonScript' in the Config sheet." & vbCrLf & _
+               "Please ensure the named ranges are set up correctly.", vbCritical
+        Exit Sub
+    End If
+    On Error GoTo 0
+    
+    ' Build the command to execute. We pass the workbook's full path as an argument.
+    ' The quotes are important for paths with spaces.
+    command = """" & pythonPath & """ """ & scriptPath & """"
+    
+    ' Run the command.
+    ' The "0" means the command window will be hidden.
+    ' The "True" means VBA will wait for the script to finish before continuing.
+    shell.Run command, 0, True
+    
+    ' Optional: Refresh the sheet to show the new data immediately.
+    ' ThisWorkbook.Worksheets("Output").Calculate ' Change "Output" to your sheet name
+    
+    MsgBox "Python script finished processing."
+    
+End Sub
+
+' You can tie this macro to a button or a Worksheet_Change event.
+' For example, in the sheet's code module:
+'
+' Private Sub Worksheet_Change(ByVal Target As Range)
+'     ' If the change is in cell A1
+'     If Not Intersect(Target, Me.Range("A1")) Is Nothing Then
+'         RunPythonScript
+'     End If
+' End Sub
+
+
+
+
+
 # ==============================================================================
 #  main_script.py
 #  This script is designed to be called from an open Excel file via VBA.
