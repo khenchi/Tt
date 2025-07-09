@@ -1,3 +1,126 @@
+# ==============================================================================
+#  main_script.py
+#  This script is designed to be called from an open Excel file via VBA.
+# ==============================================================================
+import pandas as pd
+import xlwings as xw
+
+class InteractiveExcelHandler:
+    """
+    Manages read/write operations for a workbook that is ALREADY OPEN
+    and has called this script.
+    """
+    def __init__(self):
+        """
+        Initializes the handler by connecting to the calling Excel instance.
+        """
+        try:
+            # This is the magic command. It gets the book object that called the script.
+            self.wb = xw.Book.caller()
+            self.app = self.wb.app
+        except Exception as e:
+            # This will fail if the script is not called from Excel.
+            # We can log this to a file for debugging.
+            with open("excel_handler_error.log", "w") as f:
+                f.write("Error: This script must be called from an Excel VBA macro.\n")
+                f.write(f"Exception: {e}\n")
+            # Re-raise the exception to stop execution.
+            raise RuntimeError("This script must be called from an Excel VBA macro.") from e
+
+    def read_data(self, sheet_name: str, range_address: str) -> pd.DataFrame:
+        """
+        Reads data from a specified range in a sheet into a DataFrame.
+
+        Args:
+            sheet_name: The name of the sheet to read from.
+            range_address: The address of the data (e.g., "A1:C10" or a named range).
+                           Using .expand() is great for dynamic tables.
+        """
+        try:
+            sheet = self.wb.sheets[sheet_name]
+            # Read data including the header into a DataFrame
+            data = sheet.range(range_address).options(pd.DataFrame, header=1, index=False).value
+            print(f"Read {len(data)} rows from '{sheet_name}'.")
+            return data
+        except Exception as e:
+            # Handle cases where the sheet or range doesn't exist
+            print(f"Error reading from sheet '{sheet_name}': {e}")
+            return pd.DataFrame() # Return empty DataFrame on error
+
+    def write_data(self, df: pd.DataFrame, sheet_name: str, start_cell: str):
+        """
+        Writes a DataFrame back into the live workbook.
+        It does NOT save the workbook; the user does that.
+
+        Args:
+            df: The DataFrame to write.
+            sheet_name: The name of the target sheet (will be created if it doesn't exist).
+            start_cell: The top-left cell where the data should be written (e.g., "A1").
+        """
+        try:
+            # Find or create the sheet
+            if sheet_name in [s.name for s in self.wb.sheets]:
+                sheet = self.wb.sheets[sheet_name]
+            else:
+                sheet = self.wb.sheets.add(sheet_name)
+            
+            # Clear previous content and write new data (header included)
+            sheet.range(start_cell).expand().clear_contents()
+            sheet.range(start_cell).options(pd.DataFrame, index=False, header=True).value = df
+            print(f"Wrote {len(df)} rows to sheet '{sheet_name}' starting at {start_cell}.")
+        except Exception as e:
+            print(f"Error writing to sheet '{sheet_name}': {e}")
+
+
+def main():
+    """
+    The main business logic of the script.
+    """
+    print("Python script started...")
+    
+    # 1. Connect to the live Excel workbook
+    handler = InteractiveExcelHandler()
+
+    # 2. Read the data from a source sheet
+    #    Let's assume the source data is in a sheet named "SourceData" in a table starting at A1.
+    source_df = handler.read_data(sheet_name="SourceData", range_address="A1")
+
+    if source_df.empty:
+        print("No data to process. Exiting.")
+        return
+
+    # 3. Perform the business logic (e.g., filtering)
+    #    Let's filter for rows where 'Quantity' > 100
+    try:
+        filtered_df = source_df[source_df['Quantity'] > 100].copy()
+        print("Filtered data:")
+        print(filtered_df)
+    except KeyError:
+        print("Error: 'Quantity' column not found in source data.")
+        return
+
+    # 4. Write the results back to a different sheet or location
+    handler.write_data(df=filtered_df, sheet_name="Output", start_cell="A1")
+    
+    print("Python script finished successfully.")
+
+
+if __name__ == "__main__":
+    # The script execution starts here
+    # A try/except block is good for catching any unexpected errors
+    # and writing them to a log file for easier debugging.
+    try:
+        main()
+    except Exception as e:
+        with open("excel_handler_error.log", "w") as f:
+            f.write(f"An unexpected error occurred: {e}\n")
+
+
+
+
+
+
+
 def generate_subtotals_generic(df, hierarchy_cols, value_cols):
     """
     Génère un DataFrame avec des sous-totaux hiérarchiques,
